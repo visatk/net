@@ -12,14 +12,14 @@
     "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "netbot",
-      "database_id": "280a608f-b079-4bc4-b1b3-0f2dea8c7e75"
+      "database_name": "net",
+      "database_id": "38d9a3cb-e04f-444b-b3ad-f9f0cae4cc44"
     }
   ],
    "kv_namespaces": [
     {
       "binding": "KV",
-      "id": "1e5b75dbf4084655b523878f92da0b00"
+      "id": "ba3611408ed0468180411802f85928d5"
     }
   ]
 }
