@@ -24,6 +24,10 @@ export class BotRouter {
         // Feature: Let users tap to regenerate the exact same BIN
         const input = cb.data.split("_")[1];
         await handleGen([input], chatId, env);
+      } else if (cb.data.startsWith("fake_")) {
+        // Handle fake address regeneration[cite: 4]
+        const input = cb.data.split("_")[1];
+        await handleFake([input], chatId, env);
       }
       
       // Tell Telegram we received the click
