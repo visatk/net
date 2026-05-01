@@ -12,14 +12,14 @@
     "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "net",
-      "database_id": "38d9a3cb-e04f-444b-b3ad-f9f0cae4cc44"
+      "database_name": "atlas",
+      "database_id": "01c4be24-2c0f-449b-9ccc-24481de586f3"
     }
   ],
    "kv_namespaces": [
     {
       "binding": "KV",
-      "id": "ba3611408ed0468180411802f85928d5"
+      "id": "d467334de0aa4bd58910c266f8ac0233"
     }
   ]
 }
