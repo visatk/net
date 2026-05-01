@@ -9,12 +9,16 @@ export const users = sqliteTable('users', {
   joinedAt: integer('joined_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// Track purchase intent for analytics
-export const orderIntents = sqliteTable('order_intents', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const orders = sqliteTable('orders', {
+  id: text('id').primaryKey(), // We will use a generated UUID/CUID
   telegramId: integer('telegram_id').notNull(),
   productId: text('product_id').notNull(),
   productName: text('product_name').notNull(),
-  price: real('price').notNull(),
+  usdPrice: real('usd_price').notNull(),
+  cryptoCurrency: text('crypto_currency').notNull(), // e.g., 'btc', 'ltc', 'usdt@trx'
+  cryptoAmount: integer('crypto_amount').notNull(), // Minor units
+  invoiceId: text('apirone_invoice_id').notNull(),
+  paymentAddress: text('payment_address').notNull(),
+  status: text('status', { enum: ['created', 'paid', 'partpaid', 'overpaid', 'completed', 'expired'] }).default('created').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
