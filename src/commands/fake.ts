@@ -1,67 +1,61 @@
 import { Env } from "../types";
 import { sendMessage } from "../utils/telegram";
-import { allFakers, Faker } from "@faker-js/faker"; //
 
-// Map common 2-letter country inputs to the exact FakerJS locale definition
-const localeMap: Record<string, keyof typeof allFakers> = {
-  us: 'en_US',
-  uk: 'en_GB',
-  gb: 'en_GB',
-  ca: 'en_CA',
-  au: 'en_AU',
-  de: 'de',
-  fr: 'fr',
-  it: 'it',
-  es: 'es',
-  mx: 'es_MX',
-  br: 'pt_BR',
-  ru: 'ru',
-  jp: 'ja',
-  cn: 'zh_CN',
-  in: 'en_IN',
-  bd: 'bn_BD', // Bengali (Bangladesh)[cite: 5]
-  za: 'en_ZA',
-  ng: 'en_NG',
-  nl: 'nl',
-  se: 'sv'
-};
+// Supported nationalities by randomuser.me API
+const supportedNats = [
+  'au', 'br', 'ca', 'ch', 'de', 'dk', 'es', 'fi', 'fr', 'gb', 
+  'ie', 'in', 'ir', 'mx', 'nl', 'no', 'nz', 'rs', 'tr', 'ua', 'us'
+];
 
 // Map inputs to emoji flags for the UI
 const flagMap: Record<string, string> = {
   us: '🇺🇸', uk: '🇬🇧', gb: '🇬🇧', ca: '🇨🇦', au: '🇦🇺', 
   de: '🇩🇪', fr: '🇫🇷', it: '🇮🇹', es: '🇪🇸', mx: '🇲🇽',
   br: '🇧🇷', ru: '🇷🇺', jp: '🇯🇵', cn: '🇨🇳', in: '🇮🇳', 
-  bd: '🇧🇩', za: '🇿🇦', ng: '🇳🇬', nl: '🇳🇱', se: '🇸🇪'
+  bd: '🇧🇩', za: '🇿🇦', ng: '🇳🇬', nl: '🇳🇱', se: '🇸🇪',
+  ch: '🇨🇭', dk: '🇩🇰', fi: '🇫🇮', ie: '🇮🇪', ir: '🇮🇷',
+  no: '🇳🇴', nz: '🇳🇿', rs: '🇷🇸', tr: '🇹🇷', ua: '🇺🇦'
 };
 
 export async function handleFake(args: string[], chatId: number, env: Env): Promise<void> {
   // Default to US if no argument is provided
-  const inputCode = (args[0] || "us").toLowerCase();
+  let inputCode = (args[0] || "us").toLowerCase();
   
-  // Resolve the locale or fallback to English (US)
-  const localeKey = localeMap[inputCode] || 'en_US';
-  const flag = flagMap[inputCode] || '🏳️';
-  
-  // Dynamically load the correct Faker instance[cite: 5]
-  const localeFaker: Faker = allFakers[localeKey] || allFakers['en_US'];
+  // Normalize 'uk' to 'gb' as randomuser.me uses 'gb'
+  if (inputCode === 'uk') inputCode = 'gb';
+
+  // Check if nationality is supported, otherwise fallback to 'us'
+  const nat = supportedNats.includes(inputCode) ? inputCode : 'us';
+  const flag = flagMap[inputCode] || flagMap[nat] || '🏳️';
 
   try {
-    // Generate highly accurate localized data based on the selected region
-    const name = localeFaker.person.fullName();
-    const gender = localeFaker.person.sex(); 
-    
-    // Address data[cite: 6]
-    const street = localeFaker.location.streetAddress();
-    const city = localeFaker.location.city();
-    const state = localeFaker.location.state();
-    const zip = localeFaker.location.zipCode();
-    const country = localeFaker.location.country();
-    
-    // Localized phone format[cite: 6]
-    const phone = localeFaker.phone.number();
+    // Fetch data from randomuser.me using Cloudflare's native fetch
+    const response = await fetch(`https://randomuser.me/api/?nat=${nat}`, {
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "Nexus-Infrastructure-Bot/2.0"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    const data = await response.json<{ results: any[] }>();
+    const user = data.results[0];
+
+    // Extract variables
+    const name = `${user.name.first} ${user.name.last}`;
+    const gender = user.gender; 
+    const street = `${user.location.street.number} ${user.location.street.name}`;
+    const city = user.location.city;
+    const state = user.location.state;
+    const zip = user.location.postcode;
+    const country = user.location.country;
+    const phone = user.phone;
 
     // High-fidelity UI format
-    const response = `📍 <b>Address For ${flag} ${country}</b>
+    const output = `📍 <b>Address For ${flag} ${country}</b>
 ———————————————
 • <b>Name</b> : ${name}
 • <b>Gender</b> : ${gender.charAt(0).toUpperCase() + gender.slice(1)}
@@ -77,10 +71,10 @@ export async function handleFake(args: string[], chatId: number, env: Env): Prom
       inline_keyboard: [[{ text: `🔄 Regenerate ${inputCode.toUpperCase()}`, callback_data: `fake_${inputCode}` }]]
     };
 
-    await sendMessage(env, chatId, response, markup);
+    await sendMessage(env, chatId, output, markup);
 
   } catch (error) {
-    console.error("Faker Generation Error:", error);
-    await sendMessage(env, chatId, "❌ <b>Error:</b> Could not generate data for this region.");
+    console.error("RandomUser API Error:", error);
+    await sendMessage(env, chatId, "❌ <b>Error:</b> Could not generate data for this region. Please try again.");
   }
 }
