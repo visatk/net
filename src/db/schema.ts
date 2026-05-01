@@ -1,10 +1,16 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 
 export const users = sqliteTable('users', {
-  id: integer('id').primaryKey(),
-  telegramId: integer('telegram_id').notNull().unique(),
+  telegramId: integer('telegram_id').primaryKey(),
   username: text('username'),
   firstName: text('first_name'),
-  role: text('role', { enum: ['user', 'admin', 'superadmin'] }).default('user').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  role: text('role', { enum: ['admin', 'user', 'banned'] }).default('user').notNull(),
+  joinedAt: integer('joined_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const botSettings = sqliteTable('bot_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
