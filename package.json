@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "deploy": "npm run db:generate && npm run db:migrate && npm run cf-typegen && wrangler deploy",
+    "deploy": "npm run cf-typegen && wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest",
