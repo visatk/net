@@ -5,7 +5,9 @@ import * as schema from './db/schema';
 export interface Env {
   DB: D1Database;
   TELEGRAM_BOT_TOKEN: string;
-  ADMIN_TELEGRAM_ID: string; // The root admin ID
+  ADMIN_TELEGRAM_ID: string;
+  APIRONE_ACCOUNT: string;
+  PUBLIC_WEBHOOK_URL: string;
 }
 
 // Extend the standard grammY context with our database and environment
