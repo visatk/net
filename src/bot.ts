@@ -1,102 +1,83 @@
-import { handleGeneralCommands, Env, TelegramMessage } from './commands/start';
+import { handleGeneralCommands, TelegramMessage } from './commands/start';
 import { handleGenCommand } from './commands/gen';
-import { handleChkCommand } from './commands/chk'; 
+import { handleChkCommand } from './commands/chk';
 import { handleFakeCommand } from './commands/fake';
-import { sendMessage } from './utils/telegram';
+import { sendTelegramMessage } from './utils/telegram';
 
-/**
- * Represents the incoming webhook payload from Telegram
- */
-export interface TelegramWebhookPayload {
-  update_id: number;
-  message?: TelegramMessage;
-  edited_message?: TelegramMessage;
-  callback_query?: any;
+export interface Env {
+  DB: D1Database;
+  TELEGRAM_BOT_TOKEN: string;
+  // Optional: Add a secret token to verify requests actually come from Telegram
+  WEBHOOK_SECRET?: string; 
 }
 
-/**
- * Core Webhook Dispatcher
- * Handles incoming POST requests from Telegram, validates security, and routes commands.
- * 
- * @param request The incoming HTTP Request object
- * @param env Cloudflare Environment bindings
- * @returns A standard Response object
- */
-export async function handleWebhook(request: Request, env: Env & { TELEGRAM_TOKEN: string; WEBHOOK_SECRET?: string }): Promise<Response> {
-  // 1. Security check: Validate Telegram Secret Token if configured
-  // This prevents malicious actors from sending fake payloads directly to your worker URL
-  if (env.WEBHOOK_SECRET) {
-    const secretToken = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
-    if (secretToken !== env.WEBHOOK_SECRET) {
-      console.warn("Unauthorized webhook access attempt.");
-      return new Response('Unauthorized', { status: 401 });
+export default {
+  /**
+   * Main fetch handler for the Cloudflare Worker.
+   * Receives incoming webhook POST requests from Telegram.
+   */
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // 1. Security Check & Method Validation
+    if (request.method !== 'POST') {
+      return new Response('Method Not Allowed', { status: 405 });
     }
-  }
 
-  // 2. Only allow POST requests
-  if (request.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
-  }
+    // Optional but recommended: Check Telegram's X-Telegram-Bot-Api-Secret-Token
+    if (env.WEBHOOK_SECRET && request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== env.WEBHOOK_SECRET) {
+      return new Response('Unauthorized', { status: 403 });
+    }
 
-  try {
-    // 3. Parse the Telegram payload
-    const payload: TelegramWebhookPayload = await request.json();
+    try {
+      const update = await request.json<any>();
 
-    // Support both new messages and edited messages
-    const message = payload.message || payload.edited_message;
+      // 2. Early Return for non-message updates (e.g., edited messages, inline queries)
+      // Modify this if you plan to handle callback_queries from inline keyboards
+      if (!update.message || !update.message.text) {
+        return new Response('OK', { status: 200 }); 
+      }
 
-    // If there's no text message, ignore it and return 200 to acknowledge
-    if (!message || !message.text) {
+      const message: TelegramMessage = update.message;
+      const text = message.text.trim();
+      const chatId = message.chat.id;
+
+      let responseText: string | null = null;
+
+      // 3. Command Routing Hierarchy
+      // First check general commands (/start, /help, /id) which also handle D1 DB sync
+      responseText = await handleGeneralCommands(message, env);
+
+      // If it wasn't a general command, route to specific operational tools
+      if (!responseText) {
+        if (text.startsWith('/gen')) {
+          responseText = await handleGenCommand(text);
+        } else if (text.startsWith('/chk')) {
+          // Assuming /chk might need DB access for rate-limiting or premium status
+          responseText = await handleChkCommand(text, env); 
+        } else if (text.startsWith('/fake')) {
+          responseText = await handleFakeCommand(text);
+        }
+      }
+
+      // 4. Background Execution (The Edge Architecture Secret)
+      // If we have a response, send it to Telegram asynchronously.
+      // This prevents webhook timeouts and duplicate message processing.
+      if (responseText) {
+        ctx.waitUntil(
+          sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, responseText)
+            .catch(err => console.error("Failed to send Telegram message:", err))
+        );
+      }
+
+      // 5. Acknowledge Receipt Immediately
+      return new Response('OK', { status: 200 });
+
+    } catch (error) {
+      // Log errors to Cloudflare Tail Workers / Axiom
+      console.error('Webhook processing error:', error);
+      
+      // Always return 200 to Telegram so it doesn't retry the failing payload,
+      // unless it's a catastrophic network failure.
       return new Response('OK', { status: 200 });
     }
-
-    const text = message.text.trim();
-    const chatId = message.chat.id;
-    let replyText: string | null = null;
-
-    // 4. Global Interceptors (Database Upserts, Logging, /start, /help, /id)
-    // We run the general handler first. If it returns text, it means it caught a global command.
-    replyText = await handleGeneralCommands(message, env);
-
-    // 5. Command Router
-    // If the general handler didn't process the command, route it to specific modules
-    if (!replyText) {
-      // Extract the command (e.g., "/gen" from "/gen 414720 10")
-      const command = text.split(' ')[0].toLowerCase();
-
-      // Check if it has a bot username attached (e.g., /gen@RavenHqBot) and strip it
-      const cleanCommand = command.includes('@') ? command.split('@')[0] : command;
-
-      switch (cleanCommand) {
-        case '/gen':
-          replyText = await handleGenCommand(text);
-          break;
-        case '/chk':
-          // Pass env if your checker needs D1 access or external APIs
-          replyText = await handleChkCommand(text, env); 
-          break;
-        case '/fake':
-          replyText = await handleFakeCommand(text);
-          break;
-        default:
-          // Ignore unknown commands to prevent spam in group chats
-          break;
-      }
-    }
-
-    // 6. Send the response back to Telegram
-    if (replyText) {
-      await sendMessage(env.TELEGRAM_TOKEN, chatId, replyText, message.message_id);
-    }
-
-    // Always return 200 OK so Telegram knows the webhook succeeded
-    return new Response('OK', { status: 200 });
-
-  } catch (error) {
-    console.error('Fatal Webhook Error:', error);
-    
-    // We catch the error but STILL return 200 OK to prevent Telegram retry loops
-    // In a production environment, you should send an alert to your own admin Telegram ID here
-    return new Response('Internal Server Error handled gracefully', { status: 200 });
   }
-}
+};
