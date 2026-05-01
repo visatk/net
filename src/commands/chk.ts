@@ -1,22 +1,42 @@
-import { Env } from "../types";
-import { sendMessage } from "../utils/telegram";
+import { Env } from '../bot';
+import { calculateLuhnCheckDigit } from '../utils/luhn';
 
-export async function handleChk(args: string[], chatId: number, env: Env, isVbv: boolean = false): Promise<void> {
-  if (!args[0]) {
-    await sendMessage(env, chatId, `❌ <b>Error:</b> Provide card details.\n<i>Example:</i> <code>/${isVbv ? 'vbv' : 'chk'} cc|mm|yy|cvv</code>`);
-    return;
+export async function handleChkCommand(text: string, env: Env): Promise<string> {
+  const args = text.replace(/^\/chk\s*/i, '').trim();
+  
+  if (!args) {
+    return `❌ **Invalid Format.**\nUsage: \`/chk [CC|MM|YY|CVV]\``;
   }
 
-  const type = isVbv ? "VBV Lookup" : "Auth Check";
-  const status = Math.random() > 0.5 ? "✅ <b>Approved</b>" : "❌ <b>Declined</b>";
-  const msg = status.includes("Approved") ? "1000: Approved" : "2001: Insufficient Funds";
+  // Parse standard format: 4147202134567890|12|28|123
+  const parts = args.split('|');
+  const cc = parts[0]?.replace(/[^0-9]/g, '');
 
-  const response = `💳 <b>Mock ${type}</b>
-———————————————
-<b>Card:</b> <code>${args[0]}</code>
-<b>Status:</b> ${status}
-<b>Message:</b> ${msg}
-<b>Gateway:</b> Nexus Stripe Auth`;
+  if (!cc || cc.length < 13 || cc.length > 19) {
+    return `⚠️ **Validation Error:** Invalid Card Length.`;
+  }
 
-  await sendMessage(env, chatId, response);
+  // Edge-computed Luhn Validation
+  const payload = cc.slice(0, -1);
+  const checkDigit = parseInt(cc.slice(-1), 10);
+  const isValidLuhn = calculateLuhnCheckDigit(payload) === checkDigit;
+
+  if (!isValidLuhn) {
+    return `
+🔍 **CC Checker**
+💳 **Card:** \`${cc.substring(0,6)}******${cc.slice(-4)}\`
+❌ **Status:** DECLINED (Luhn Check Failed)
+    `.trim();
+  }
+
+  // --- Real API logic would go here (e.g., fetch to Stripe/Braintree) ---
+  // const response = await fetch('YOUR_GATEWAY_URL', { ... });
+
+  return `
+🔍 **CC Checker**
+💳 **Card:** \`${args}\`
+✅ **Status:** APPROVED (Simulated)
+🛡️ **Luhn Check:** Passed
+⏱️ **Response Time:** 0.8s
+  `.trim();
 }
