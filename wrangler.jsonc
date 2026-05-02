@@ -12,14 +12,14 @@
     "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "atlas",
-      "database_id": "1338c005-d273-49ad-acc9-23741bebc232"
+      "database_name": "viteapp",
+      "database_id": "9909fa7a-c277-4b38-96bf-b97a8008dece"
     }
   ],
    "kv_namespaces": [
     {
-      "binding": "RATE_CACHE",
-      "id": "d467334de0aa4bd58910c266f8ac0233"
+      "binding": "CACHE",
+      "id": "bb8ef261cab04944973a633c28673def"
     }
   ]
 }
